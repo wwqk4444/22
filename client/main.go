@@ -245,6 +245,43 @@ func main() {
 			Value: 600,
 			Usage: "set how long an expired connection can live(in sec), -1 to disable",
 		},
+		cli.IntFlag{
+			Name:  "mulconn",
+			Value: 0,
+			Usage: "use multiple underlying conns for one kcp connection, default is 0",
+		},
+		cli.BoolFlag{
+			Name:  "udp",
+			Usage: "enable udp mode",
+		},
+		cli.StringFlag{
+			Name:  "pprof",
+			Usage: "set the listen address for pprof",
+		},
+		cli.BoolFlag{
+			Name:  "nodummy",
+			Usage: "don't use dummy socket",
+		},
+		cli.StringFlag{
+			Name:  "proxylist",
+			Usage: "set the path of proxy list",
+		},
+		cli.StringFlag{
+			Name:  "chnroute",
+			Usage: "set the path of china route",
+		},
+		cli.BoolFlag{
+			Name:  "proxy",
+			Usage: "enable default proxy(socks4/socks4a/socks5/http)",
+		},
+		cli.BoolFlag{
+			Name:  "udprelay",
+			Usage: "enable socks5 udp relay",
+		},
+		cli.StringFlag{
+			Name:  "tunnels",
+			Usage: "provide additional tcp/udp tunnels, eg: udp,:10000,8.8.8.8:53;tcp,:10080,www.google.com:80",
+		},
 	}
 	myApp.Action = func(c *cli.Context) error {
 		config := Config{}
@@ -276,6 +313,14 @@ func main() {
 		config.Host = c.String("host")
 		config.IgnRST = c.Bool("ignrst")
 		config.ScavengeTTL = c.Int("scavengettl")
+		config.MulConn = c.Int("mulconn")
+		config.UDP = c.Bool("udp")
+		config.Pprof = c.String("pprof")
+		config.NoDummpy = c.Bool("nodummy")
+		config.ProxyList = c.String("proxylist")
+		config.ChnRoute = c.String("chnroute")
+		config.UDPRelay = c.Bool("udprelay")
+		config.Proxy = c.Bool("proxy")
 
 		if c.String("c") != "" {
 			err := parseJSONConfig(&config, c.String("c"))
