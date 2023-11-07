@@ -35,6 +35,14 @@ type Config struct {
 	Host         string `json:"host"`
 	IgnRST       bool   `json:"ignrst"`
 	ScavengeTTL  int    `json:"scavengettl"`
+	MulConn      int    `json:"mulconn"`
+	UDP          bool   `json:"udp"`
+	Pprof        string `json:"pprof"`
+	NoDummpy     bool   `json:"nodummy"`
+	ProxyList    string `json:"proxylist"`
+	ChnRoute     string `json:"chnroute"`
+	UDPRelay     bool   `json:"udprelay"`
+	Proxy        bool   `json:"proxy"`
 }
 
 func parseJSONConfig(config *Config, path string) error {
