@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha1"
+	"encoding/binary"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -9,6 +10,8 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/pbkdf2"
@@ -17,7 +20,9 @@ import (
 	"syscall"
 
 	kcpraw "github.com/ccsexyz/kcp-go-raw"
+	ss "github.com/ccsexyz/shadowsocks-go/shadowsocks"
 	"github.com/ccsexyz/smux"
+	"github.com/ccsexyz/utils"
 	"github.com/golang/snappy"
 	"github.com/urfave/cli"
 	kcp "github.com/xtaci/kcp-go"
@@ -70,25 +75,101 @@ func handleMux(conn io.ReadWriteCloser, config *Config) {
 		return
 	}
 	defer mux.Close()
+	args := make(map[string]interface{})
+	var acceptor ss.Acceptor
+	if config.DefaultProxy {
+		acceptor = ss.GetSocksAcceptor(args)
+	} else if config.ShadowProxy {
+		args["method"] = "multi"
+		args["password"] = config.Key
+		acceptor = ss.GetShadowAcceptor(args)
+	}
 	for {
 		p1, err := mux.AcceptStream()
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		p2, err := net.DialTimeout("tcp", config.Target, 5*time.Second)
-		if err != nil {
-			p1.Close()
-			log.Println(err)
-			continue
-		}
-		go handleClient(p1, p2)
+		go func(conn1 net.Conn) {
+			target := config.Target
+			if acceptor != nil {
+				conn1 = acceptor(conn1)
+				if conn1 == nil {
+					return
+				}
+				ssconn, ok := conn1.(ss.Conn)
+				if !ok {
+					conn1.Close()
+					return
+				}
+				target = ssconn.GetDst().String()
+			}
+			if target == "udprelay:6666" {
+				go handleUDPClient(conn1)
+				return
+			}
+			conn2, err := net.DialTimeout("tcp", target, 5*time.Second)
+			if err != nil {
+				conn1.Close()
+				log.Println(err)
+				return
+			}
+			var suffix string
+			if target != config.Target {
+				suffix = " (" + target + ")"
+			}
+			go handleClient(conn1, conn2, suffix)
+		}(p1)
 	}
 }
 
-func handleClient(p1, p2 io.ReadWriteCloser) {
-	log.Println("stream opened")
-	defer log.Println("stream closed")
+var udpBufPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 2048)
+	},
+}
+
+func handleUDPClient(p1 net.Conn) {
+	defer p1.Close()
+
+	buf := udpBufPool.Get().([]byte)
+	defer udpBufPool.Put(buf)
+
+	_, err := io.ReadFull(p1, buf[:2])
+	if err != nil {
+		return
+	}
+	sz := int(binary.BigEndian.Uint16(buf[:2]))
+	if sz > len(buf) {
+		return
+	}
+	_, err = io.ReadFull(p1, buf[:sz])
+	if err != nil {
+		return
+	}
+	target := string(buf[:sz])
+
+	p2, err := net.Dial("udp", target)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer p2.Close()
+
+	log.Println("udp opened", "("+target+")")
+	defer log.Println("udp closed", "("+target+")")
+
+	tosec := 60
+	if strings.HasSuffix(target, ":53") {
+		tosec = 5
+	}
+
+	utils.PipeUDPOverTCP(p2, p1, &udpBufPool, time.Second*time.Duration(tosec), nil)
+}
+
+func handleClient(p1, p2 io.ReadWriteCloser, suffix string) {
+	log.Println("stream opened", suffix)
+	defer log.Println("stream closed", suffix)
 	defer p1.Close()
 	defer p2.Close()
 
@@ -115,10 +196,7 @@ func checkError(err error) {
 
 func main() {
 	rand.Seed(int64(time.Now().Nanosecond()))
-	if VERSION == "SELFBUILD" {
-		// add more log flags for debugging
-		log.SetFlags(log.LstdFlags | log.Lshortfile)
-	}
+	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime | log.Lmicroseconds)
 	myApp := cli.NewApp()
 	myApp.Name = "kcpraw"
 	myApp.Usage = "server(with SMUX)"
@@ -143,7 +221,7 @@ func main() {
 		cli.StringFlag{
 			Name:  "crypt",
 			Value: "aes",
-			Usage: "aes, aes-128, aes-192, salsa20, blowfish, twofish, cast5, 3des, tea, xtea, xor, none",
+			Usage: "aes, aes-128, aes-192, chacha20, salsa20, blowfish, twofish, cast5, 3des, tea, xtea, xor, sm4, none",
 		},
 		cli.StringFlag{
 			Name:  "mode",
@@ -183,6 +261,10 @@ func main() {
 		cli.BoolFlag{
 			Name:  "nocomp",
 			Usage: "disable compression",
+		},
+		cli.BoolFlag{
+			Name:  "usemul",
+			Usage: "use multiple underlying conns for one kcp connection",
 		},
 		cli.BoolFlag{
 			Name:   "acknodelay",
@@ -240,12 +322,20 @@ func main() {
 			Usage: "config from json file, which will override the command from shell",
 		},
 		cli.BoolFlag{
-			Name:  "nohttp",
-			Usage: "don't send http request after tcp 3-way handshake",
+			Name:  "udp",
+			Usage: "enable udp mode",
+		},
+		cli.StringFlag{
+			Name:  "pprof",
+			Usage: "set the listen address for pprof",
 		},
 		cli.BoolFlag{
-			Name:  "ignrst",
-			Usage: "ignore tcp rst packet(set it with caution)",
+			Name:  "proxy",
+			Usage: "enable default proxy(socks4/socks4a/socks5/http)",
+		},
+		cli.BoolFlag{
+			Name:  "ssproxy",
+			Usage: "enable shadowsocks proxy",
 		},
 	}
 	myApp.Action = func(c *cli.Context) error {
@@ -272,8 +362,11 @@ func main() {
 		config.Log = c.String("log")
 		config.SnmpLog = c.String("snmplog")
 		config.SnmpPeriod = c.Int("snmpperiod")
-		config.NoHTTP = c.Bool("nohttp")
-		config.IgnRST = c.Bool("ignrst")
+		config.UseMul = c.Bool("usemul")
+		config.UDP = c.Bool("udp")
+		config.Pprof = c.String("pprof")
+		config.DefaultProxy = c.Bool("proxy")
+		config.ShadowProxy = c.Bool("ssproxy")
 
 		if c.String("c") != "" {
 			//Now only support json config file
@@ -289,9 +382,10 @@ func main() {
 			log.SetOutput(f)
 		}
 
-		kcpraw.SetNoHTTP(config.NoHTTP)
+		kcpraw.SetNoHTTP(false)
+		kcpraw.SetMixed(true)
 		kcpraw.SetDSCP(config.DSCP)
-		kcpraw.SetIgnRST(config.IgnRST)
+		kcpraw.SetIgnRST(true)
 
 		switch config.Mode {
 		case "normal":
@@ -308,6 +402,8 @@ func main() {
 		pass := pbkdf2.Key([]byte(config.Key), []byte(SALT), 4096, 32, sha1.New)
 		var block kcp.BlockCrypt
 		switch config.Crypt {
+		case "sm4":
+			block, _ = kcp.NewSM4BlockCrypt(pass[:16])
 		case "tea":
 			block, _ = kcp.NewTEABlockCrypt(pass[:16])
 		case "xor":
@@ -330,12 +426,14 @@ func main() {
 			block, _ = kcp.NewXTEABlockCrypt(pass[:16])
 		case "salsa20":
 			block, _ = kcp.NewSalsa20BlockCrypt(pass)
+		case "chacha20":
+			block, _ = utils.NewChaCha20BlockCrypt(pass)
 		default:
 			config.Crypt = "aes"
 			block, _ = kcp.NewAESBlockCrypt(pass)
 		}
 
-		lis, err := kcpraw.ListenWithOptions(config.Listen, block, config.DataShard, config.ParityShard)
+		lis, err := kcpraw.ListenWithOptions(config.Listen, block, config.DataShard, config.ParityShard, config.Key, config.UseMul, config.UDP)
 		checkError(err)
 		log.Println("listening on:", lis.Addr())
 		log.Println("target:", config.Target)
@@ -351,7 +449,22 @@ func main() {
 		log.Println("keepalive:", config.KeepAlive)
 		log.Println("snmplog:", config.SnmpLog)
 		log.Println("snmpperiod:", config.SnmpPeriod)
-		log.Println("nohttp:", config.NoHTTP)
+		log.Println("usemul:", config.UseMul)
+		log.Println("udp mode:", config.UDP)
+		log.Println("pprof listen at:", config.Pprof)
+		log.Println("default proxy:", config.DefaultProxy)
+		log.Println("shadowsocks proxy:", config.ShadowProxy)
+
+		if len(config.Pprof) != 0 {
+			if utils.PprofEnabled() {
+				log.Println("run pprof http server at", config.Pprof)
+				go func() {
+					utils.RunProfileHTTPServer(config.Pprof)
+				}()
+			} else {
+				log.Println("set pprof but pprof isn't compiled")
+			}
+		}
 
 		sigch := make(chan os.Signal, 2)
 		signal.Notify(sigch, syscall.SIGINT, syscall.SIGTERM)
@@ -368,7 +481,16 @@ func main() {
 				conn.SetStreamMode(true)
 				conn.SetWriteDelay(true)
 				conn.SetNoDelay(config.NoDelay, config.Interval, config.Resend, config.NoCongestion)
-				conn.SetMtu(config.MTU)
+				var mss int
+				rawlis := kcpraw.GetListenerByAddr(lis.Addr())
+				if rawlis != nil {
+					mss = rawlis.GetMSSByAddr(conn.RemoteAddr())
+				}
+				if mss > 0 && mss < config.MTU {
+					conn.SetMtu(mss)
+				} else {
+					conn.SetMtu(config.MTU)
+				}
 				conn.SetWindowSize(config.SndWnd, config.RcvWnd)
 				conn.SetACKNoDelay(config.AckNodelay)
 

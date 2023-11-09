@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"os"
+
+	"github.com/ccsexyz/shadowsocks-go/shadowsocks"
 )
 
 // Config for client
@@ -31,9 +33,8 @@ type Config struct {
 	Log          string `json:"log"`
 	SnmpLog      string `json:"snmplog"`
 	SnmpPeriod   int    `json:"snmpperiod"`
-	NoHTTP       bool   `json:"nohttp"`
+	Obfs         string `json:"obfs"`
 	Host         string `json:"host"`
-	IgnRST       bool   `json:"ignrst"`
 	ScavengeTTL  int    `json:"scavengettl"`
 	MulConn      int    `json:"mulconn"`
 	UDP          bool   `json:"udp"`
@@ -43,6 +44,18 @@ type Config struct {
 	ChnRoute     string `json:"chnroute"`
 	UDPRelay     bool   `json:"udprelay"`
 	Proxy        bool   `json:"proxy"`
+
+	Tunnels []*tunnelConfig `json:"tunnels"`
+
+	proxyAcceptor ss.Acceptor
+	autoProxyCtx  *autoProxy
+	chnRouteCtx   *chnRouteList
+}
+
+type tunnelConfig struct {
+	Type       string `json:"type"` // tcp or udp
+	LocalAddr  string `json:"localaddr"`
+	RemoteAddr string `json:"remoteaddr"`
 }
 
 func parseJSONConfig(config *Config, path string) error {
