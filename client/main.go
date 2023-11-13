@@ -19,11 +19,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/wwqk4444/kcp-go-raw"
-	"github.com/wwqk4444/s-go/redir"
-	"github.com/wwqk4444/s-go/shadowsocks"
-	"github.com/xtaci/smux"
-	"github.com/wwqk4444/ccsexyz_utils"
+	"github.com/ccsexyz/kcp-go-raw"
+	"github.com/ccsexyz/shadowsocks-go/redir"
+	"github.com/ccsexyz/shadowsocks-go/shadowsocks"
+	"github.com/ccsexyz/smux"
+	"github.com/ccsexyz/utils"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -455,9 +455,9 @@ func main() {
 			Value: "",
 			Usage: "hostname for obfuscating (Experimental)",
 		},
-		cli.StringFlag{
-			Name:  "obfs",
-			Usage: "obfuscating method, http/tls",
+		cli.BoolFlag{
+			Name:  "nohttp",
+			Usage: "don't send http request after tcp 3-way handshake",
 		},
 		cli.IntFlag{
 			Name:  "scavengettl",
@@ -501,6 +501,10 @@ func main() {
 			Name:  "tunnels",
 			Usage: "provide additional tcp/udp tunnels, eg: udp,:10000,8.8.8.8:53;tcp,:10080,www.google.com:80",
 		},
+		cli.BoolFlag{
+			Name:  "tls",
+			Usage: "enable tls-obfs",
+		},
 	}
 	myApp.Action = func(c *cli.Context) error {
 		config := Config{}
@@ -528,7 +532,7 @@ func main() {
 		config.Log = c.String("log")
 		config.SnmpLog = c.String("snmplog")
 		config.SnmpPeriod = c.Int("snmpperiod")
-		config.Obfs = c.String("obfs")
+		config.NoHTTP = c.Bool("nohttp")
 		config.Host = c.String("host")
 		config.ScavengeTTL = c.Int("scavengettl")
 		config.MulConn = c.Int("mulconn")
@@ -539,6 +543,7 @@ func main() {
 		config.ChnRoute = c.String("chnroute")
 		config.UDPRelay = c.Bool("udprelay")
 		config.Proxy = c.Bool("proxy")
+		config.TLS = c.Bool("tls")
 		tunnels := c.String("tunnels")
 
 		if c.String("c") != "" {
@@ -605,8 +610,8 @@ func main() {
 			block, _ = kcp.NewAESBlockCrypt(pass)
 		}
 
-		if len(config.Host) == 0 {
-			config.Obfs = ""
+		if !config.NoHTTP && len(config.Host) == 0 {
+			config.NoHTTP = true
 		}
 
 		if len(tunnels) != 0 {
@@ -648,7 +653,7 @@ func main() {
 		log.Println("udp mode:", config.UDP)
 		log.Println("pprof listen at:", config.Pprof)
 		log.Println("dummpy:", !config.NoDummpy)
-		log.Println("obfs:", config.Obfs)
+		log.Println("nohttp:", config.NoHTTP)
 		log.Println("httphost:", config.Host)
 		log.Println("proxy:", config.Proxy)
 		log.Println("proxylist:", config.ProxyList)
@@ -691,14 +696,8 @@ func main() {
 			config.proxyAcceptor = ss.GetSocksAcceptor(args)
 		}
 
-		switch config.Obfs {
-		case "tls":
-			kcpraw.SetNoHTTP(true)
-			kcpraw.SetTLS(true)
-		case "http":
-		default:
-			kcpraw.SetNoHTTP(true)
-		}
+		kcpraw.SetNoHTTP(config.NoHTTP)
+		kcpraw.SetTLS(config.TLS)
 		kcpraw.SetHost(config.Host)
 		kcpraw.SetDSCP(config.DSCP)
 		kcpraw.SetIgnRST(true)

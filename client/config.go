@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/wwqk4444/s-go/shadowsocks"
+	"github.com/ccsexyz/shadowsocks-go/shadowsocks"
 )
 
 // Config for client
@@ -33,7 +33,7 @@ type Config struct {
 	Log          string `json:"log"`
 	SnmpLog      string `json:"snmplog"`
 	SnmpPeriod   int    `json:"snmpperiod"`
-	Obfs         string `json:"obfs"`
+	NoHTTP       bool   `json:"nohttp"`
 	Host         string `json:"host"`
 	ScavengeTTL  int    `json:"scavengettl"`
 	MulConn      int    `json:"mulconn"`
@@ -44,6 +44,7 @@ type Config struct {
 	ChnRoute     string `json:"chnroute"`
 	UDPRelay     bool   `json:"udprelay"`
 	Proxy        bool   `json:"proxy"`
+	TLS          bool   `json:"tls"`
 
 	Tunnels []*tunnelConfig `json:"tunnels"`
 
