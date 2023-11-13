@@ -22,12 +22,12 @@ import (
 	"github.com/wwqk4444/kcp-go-raw"
 	"github.com/wwqk4444/s-go/redir"
 	"github.com/wwqk4444/s-go/shadowsocks"
-	"github.com/wwqk4444/smux/"
+	"github.com/xtaci/smux/"
 	"github.com/wwqk4444/ccsexyz_utils"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
-	"github.com/wwqk4444/kcp-go"
+	"github.com/xtaci/kcp-go"
 )
 
 var (

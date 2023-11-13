@@ -21,11 +21,11 @@ import (
 
 	kcpraw "github.com/wwqk4444/kcp-go-raw"
 	ss "github.com/wwqk4444/s-go/shadowsocks"
-	"github.com/wwqk4444/smux"
+	"github.com/xtaci/smux"
 	"github.com/wwqk4444/ccsexyz_utils"
 	"github.com/golang/snappy"
 	"github.com/urfave/cli"
-	kcp "github.com/wwqk4444/kcp-go"
+	kcp "github.com/xtaci/kcp-go"
 )
 
 var (
