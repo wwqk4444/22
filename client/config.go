@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/wwqk4444/s-go/shadowsocks"
+	"github.com/ccsexyz/shadowsocks-go/shadowsocks"
 )
 
 // Config for client
