@@ -20,8 +20,8 @@ import (
 	"syscall"
 
 	"github.com/wwqk4444/kcp-go-raw"
-	"github.com/shadowsocks/shadowsocks-go/redir"
-	"github.com/shadowsocks/shadowsocks-go/shadowsocks"
+	"github.com/wwqk4444/s-go/redir"
+	"github.com/wwqk4444/s-go/shadowsocks"
 	"github.com/xtaci/smux"
 	"github.com/wwqk4444/ccsexyz_utils"
 	"github.com/golang/snappy"

@@ -20,7 +20,7 @@ import (
 	"syscall"
 
 	kcpraw "github.com/wwqk4444/kcp-go-raw"
-	ss "github.com/shadowsocks/shadowsocks-go/shadowsocks"
+	ss "github.com/wwqk4444/s-go/shadowsocks"
 	"github.com/xtaci/smux"
 	"github.com/wwqk4444/ccsexyz_utils"
 	"github.com/golang/snappy"
