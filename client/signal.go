@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	kcp "github.com/xtaci/kcp-go"
+	kcp "github.com/wwqk4444/kcp-go"
 )
 
 func init() {
