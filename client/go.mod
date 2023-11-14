@@ -5,6 +5,7 @@ require (
     github.com/urfave/cli v1.20.0
     github.com/xtaci/smux v1.0.6
     github.com/golang/snappy v0.0.1
+    github.com/google/gopacket v1.1.14
 )
 
 go 1.13
