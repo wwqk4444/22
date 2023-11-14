@@ -19,7 +19,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/wwqk4444/snappy"
+	"github.com/golang/snappy/tree/da2bb3382a3962f48760e59434c9de82ff9f66a5"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/wwqk4444/kcp-go-raw"
